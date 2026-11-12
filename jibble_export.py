@@ -392,10 +392,10 @@ def fetch_hour_entries(
 
 
 def write_summary(path: str, rows: list[dict], review_rows: int, review_hours: float) -> None:
-    """Hours and amount per client, project, team member and description, with client subtotals and a grand total."""
+    """Hours and amount per client, project and team member, with client subtotals and a grand total."""
     groups = defaultdict(float)
     for r in rows:
-        key = (r["client"] or "(none)", r["project"] or "(none)", r["team member"], r["description"], r["rate"])
+        key = (r["client"] or "(none)", r["project"] or "(none)", r["team member"], r["rate"])
         groups[key] += float(r["duration"])
 
     def amount(hours: float, rate: str) -> float:
@@ -403,29 +403,25 @@ def write_summary(path: str, rows: list[dict], review_rows: int, review_hours: f
 
     with open(path, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
-        writer.writerow(["client", "project", "team member", "description", "hours", "rate", "amount"])
+        writer.writerow(["client", "project", "team member", "hours", "rate", "amount"])
         total_hours = total_amount = 0.0
         for client in sorted({k[0] for k in groups}):
             client_hours = client_amount = 0.0
-            for (c, project, member, description, rate), hours in sorted(groups.items()):
+            for (c, project, member, rate), hours in sorted(groups.items()):
                 if c != client:
                     continue
                 client_hours += hours
                 client_amount += amount(hours, rate)
                 writer.writerow(
                     [spreadsheet_safe(c), spreadsheet_safe(project), spreadsheet_safe(member),
-                     spreadsheet_safe(description), f"{hours:.2f}", rate, f"{amount(hours, rate):.2f}"]
+                     f"{hours:.2f}", rate, f"{amount(hours, rate):.2f}"]
                 )
-            writer.writerow(
-                [spreadsheet_safe(client), "Client total", "", "", f"{client_hours:.2f}", "", f"{client_amount:.2f}"]
-            )
+            writer.writerow([spreadsheet_safe(client), "Client total", "", f"{client_hours:.2f}", "", f"{client_amount:.2f}"])
             total_hours += client_hours
             total_amount += client_amount
-        writer.writerow(["Total", "", "", "", f"{total_hours:.2f}", "", f"{total_amount:.2f}"])
+        writer.writerow(["Total", "", "", f"{total_hours:.2f}", "", f"{total_amount:.2f}"])
         if review_rows:
-            writer.writerow(
-                ["Needs review", f"{review_rows} rows, not included above", "", "", f"{review_hours:.2f}", "", ""]
-            )
+            writer.writerow(["Needs review", f"{review_rows} rows, not included above", "", f"{review_hours:.2f}", "", ""])
 
 
 def names_by_id(api: Jibble, url: str, name_field: str = "name") -> dict[str, str]:
