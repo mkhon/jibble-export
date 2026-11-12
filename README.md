@@ -36,6 +36,10 @@ chmod +x jibble_export.py
 ./jibble_export.py --month 2026-10
 ```
 
+## Summary file
+
+Each run also writes `<output>_summary.csv` (e.g. `jibble_2026-10_summary.csv`) with hours, rate and amount (hours × rate) for each client, project, team member and description. Each client ends with a "Client total" row, and the file ends with a grand total. A missing client or project shows as `(none)`. Rows in the review section aren't included; when there are any, a last "Needs review" line gives their count and hours.
+
 ## How rows are built
 
 Jibble records time in two ways, and the CSV includes both.

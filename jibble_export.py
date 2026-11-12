@@ -391,6 +391,43 @@ def fetch_hour_entries(
     return items
 
 
+def write_summary(path: str, rows: list[dict], review_rows: int, review_hours: float) -> None:
+    """Hours and amount per client, project, team member and description, with client subtotals and a grand total."""
+    groups = defaultdict(float)
+    for r in rows:
+        key = (r["client"] or "(none)", r["project"] or "(none)", r["team member"], r["description"], r["rate"])
+        groups[key] += float(r["duration"])
+
+    def amount(hours: float, rate: str) -> float:
+        return round(hours, 2) * float(rate) if rate else 0.0
+
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(["client", "project", "team member", "description", "hours", "rate", "amount"])
+        total_hours = total_amount = 0.0
+        for client in sorted({k[0] for k in groups}):
+            client_hours = client_amount = 0.0
+            for (c, project, member, description, rate), hours in sorted(groups.items()):
+                if c != client:
+                    continue
+                client_hours += hours
+                client_amount += amount(hours, rate)
+                writer.writerow(
+                    [spreadsheet_safe(c), spreadsheet_safe(project), spreadsheet_safe(member),
+                     spreadsheet_safe(description), f"{hours:.2f}", rate, f"{amount(hours, rate):.2f}"]
+                )
+            writer.writerow(
+                [spreadsheet_safe(client), "Client total", "", "", f"{client_hours:.2f}", "", f"{client_amount:.2f}"]
+            )
+            total_hours += client_hours
+            total_amount += client_amount
+        writer.writerow(["Total", "", "", "", f"{total_hours:.2f}", "", f"{total_amount:.2f}"])
+        if review_rows:
+            writer.writerow(
+                ["Needs review", f"{review_rows} rows, not included above", "", "", f"{review_hours:.2f}", "", ""]
+            )
+
+
 def names_by_id(api: Jibble, url: str, name_field: str = "name") -> dict[str, str]:
     return {r["id"]: r.get(name_field) or "" for r in api.get_all(url)}
 
@@ -447,6 +484,7 @@ def main():
             it["problems"].append(f"same day also has {clocked[(it['person_id'], it['start'])]:.2f} h clocked")
 
     rows, review = [], []
+    review_hours = 0.0
     for it in items:
         problems = it["problems"]
         project_id = it["project_id"]
@@ -469,6 +507,7 @@ def main():
         if problems:
             # Hours move into the description so summing the duration column never counts review rows.
             hours = f"{row['duration']} h" if row["duration"] else ""
+            review_hours += float(row["duration"] or 0)
             row["description"] = join_texts("; ".join(dict.fromkeys(problems)), hours, row["description"])
             row["duration"] = ""
             review.append(row)
@@ -491,12 +530,20 @@ def main():
             csv.writer(f).writerow([REVIEW_HEADING])
             writer.writerows(safe(r) for r in review)
 
+    summary_path = None
+    if os.path.isfile(out_path):
+        base, ext = os.path.splitext(out_path)
+        summary_path = f"{base}_summary{ext or '.csv'}"
+        write_summary(summary_path, rows, len(review), review_hours)
+
     clocked = sum(1 for r in rows if r["end time"])
     total = sum(float(r["duration"]) for r in rows)
     print(
         f"Wrote {len(rows)} rows to {out_path} for {first} .. {last}: "
         f"{clocked} clocked sessions, {len(rows) - clocked} hour entries, {total:.2f} h total"
     )
+    if summary_path:
+        print(f"Wrote summary to {summary_path}")
     if review:
         print(f"{len(review)} rows need review, listed at the bottom of the CSV", file=sys.stderr)
         sys.exit(REVIEW_EXIT_CODE)
