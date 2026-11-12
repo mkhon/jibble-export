@@ -46,6 +46,7 @@ CSV_COLUMNS = [
     "start time",
     "end time",
     "duration",
+    "rate",
     "description",
 ]
 TEXT_COLUMNS = ["client", "project", "team member", "description"]
@@ -417,7 +418,9 @@ def main():
     out_path = args.out or f"jibble_{first:%Y-%m}.csv"
 
     api = Jibble(client_id, client_secret)
-    people = Names("person", names_by_id(api, f"{WORKSPACE_API}/People", "fullName"))
+    people_rows = api.get_all(f"{WORKSPACE_API}/People")
+    people = Names("person", {p["id"]: p.get("fullName") or "" for p in people_rows})
+    rates = {p["id"]: p.get("IPersonSetting/BillableRate") for p in people_rows}
     clients = Names("client", names_by_id(api, f"{WORKSPACE_API}/Clients"))
     lookups = Lookups(
         Names("activity", names_by_id(api, f"{WORKSPACE_API}/Activities")),
@@ -454,8 +457,15 @@ def main():
             "start time": it["start"],
             "end time": it["end"],
             "duration": "" if it["duration"] is None else f"{it['duration']:.2f}",
+            "rate": "",
             "description": it["description"],
         }
+        rate = rates.get(it["person_id"])
+        if rate is None:
+            if it["person_id"] in rates:
+                problems.append("no billable rate")
+        else:
+            row["rate"] = f"{rate:.2f}"
         if problems:
             # Hours move into the description so summing the duration column never counts review rows.
             hours = f"{row['duration']} h" if row["duration"] else ""

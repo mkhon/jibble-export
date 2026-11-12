@@ -1,6 +1,8 @@
 # Jibble invoicing export
 
-`jibble_export.py` pulls a month of time entries from the Jibble API and writes a CSV with these columns: client, project, team member, start time, end time, duration (decimal hours), description. See `invoicing.md` for the spec.
+`jibble_export.py` pulls a month of time entries from the Jibble API and writes a CSV with these columns: client, project, team member, start time, end time, duration (decimal hours), rate, description.
+
+The rate is the person's billable rate from their Jibble profile. Jibble keeps only the current rate, so re-exporting an old month uses today's rates. A person with hours but no rate goes to the review section. See `invoicing.md` for the spec.
 
 ## Requirements
 
